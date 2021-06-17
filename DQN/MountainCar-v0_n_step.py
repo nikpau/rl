@@ -1,8 +1,6 @@
 """
-This is nearly the same Agent as in the CartPole-v1_simple.py exept for the "play_n_steps" function.
-The main training loop also differs from the simple version as the aforementioned function now 
-plays n steps and returns the discounted transition tuple.
-The buffer is also significantly smaller to avoid errors arising from not using importance sampling.
+This is nearly the same Agent as in the CartPole-v1_n_step.py but for convenience it's a seperate file.
+Apart from the tensorboard logging and the adapted rewards for the env it is not really different. 
 """
 
 import gym
@@ -12,6 +10,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.nn.modules import loss
 import torch.nn.functional as F 
+from torch.utils.tensorboard import SummaryWriter
 import numpy as np 
 import argparse
 import collections
@@ -19,20 +18,20 @@ import collections
 # HYPERPARAMETERS ---------------------------------
 
 # Env
-ENV_NAME = "CartPole-v1"
-ACTIONS = {0: 0, 1: 1}
+ENV_NAME = "MountainCar-v0"
+ACTIONS = {0: 0, 1: 1, 2: 2}
 BUFFER_SIZE = 5000
-REWARD_BOUND = 475
+REWARD_BOUND = -110
 
 # Training
 EPSILON_START = 1.0
 GAMMA = 0.999
-EPSILON_DECAY = 0.9999
-EPSILON_FINAL = 0.02
+EPSILON_DECAY = 0.999
+EPSILON_FINAL = 0.01
 BATCH_SIZE = 256
 TARGET_NET_UPDATE = 256
 LEARNING_RATE = 0.001
-N_STEPS = 5
+N_STEPS = 3
 
 # Network -------------------------------------
 
@@ -44,6 +43,8 @@ class DQN(nn.Module):
             nn.Linear(n_obs[0],32),
             nn.ReLU(),
             nn.Linear(32,64),
+            nn.ReLU(),
+            nn.Linear(64,64),
             nn.ReLU(),
             nn.Linear(64,n_actions)
         )
@@ -168,7 +169,10 @@ if __name__ == "__main__":
     optimizer = optim.Adam(net.parameters(), lr=LEARNING_RATE)
     
     # Init agent
-    agent = Agent(env,net,tgt_net, buffer, double=False)
+    agent = Agent(env,net,tgt_net, buffer, double=True)
+    
+    # Init Logger
+    writer = SummaryWriter() # This is what uses the torch.utils.tensorboard btw 
 
     rewards_list = []
     episode_reward = 0.0
@@ -198,6 +202,11 @@ if __name__ == "__main__":
             rewards_list.append(episode_reward)
             mean_reward = np.mean(rewards_list[-100:])
             print(f"Iteration: {iter_no}. Episode: {episode_no}. Mean reward: {round(mean_reward,2)}. Epsilon: {round(eps,2)}")
+
+            # TODO: implement Summary Writer
+            writer.add_scalar("Reward per iteration", episode_reward, iter_no)
+            writer.add_scalar("Mean Reward 100", mean_reward, episode_no)
+            
             
             episode_reward = 0.0
             state = env.reset()
