@@ -1,6 +1,7 @@
 """
 This is nearly the same Agent as in the CartPole-v1_n_step.py but for convenience it's a seperate file.
 Apart from the tensorboard logging and the adapted rewards for the env it is not really different. 
+Also new net with more nodes in the second hidden layer. (I am not yet sure why this works)
 """
 
 import gym
@@ -12,7 +13,7 @@ from torch.nn.modules import loss
 import torch.nn.functional as F 
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np 
-import argparse
+import argparse # Maybe sometimes
 import collections
 
 # HYPERPARAMETERS ---------------------------------
@@ -27,11 +28,11 @@ REWARD_BOUND = -110
 EPSILON_START = 1.0
 GAMMA = 0.999
 EPSILON_DECAY = 0.999
-EPSILON_FINAL = 0.01
-BATCH_SIZE = 256
+EPSILON_FINAL = 0.001
+BATCH_SIZE = 128
 TARGET_NET_UPDATE = 256
 LEARNING_RATE = 0.001
-N_STEPS = 3
+N_STEPS = 4
 
 # Network -------------------------------------
 
@@ -42,9 +43,9 @@ class DQN(nn.Module):
         self.net = nn.Sequential(
             nn.Linear(n_obs[0],32),
             nn.ReLU(),
-            nn.Linear(32,64),
+            nn.Linear(32,128),
             nn.ReLU(),
-            nn.Linear(64,64),
+            nn.Linear(128,64),
             nn.ReLU(),
             nn.Linear(64,n_actions)
         )
@@ -97,8 +98,8 @@ class Agent:
     # Play n steps 
     def play_n_steps(self, state, n_steps, epsilon, gamma):
         state_trajectory = [state] #store origin state in array
-        action_trajectory = []
-        disc_reward = 0.0
+        action_trajectory = [] # Array for the n actions. Besides the first index it is never used. TODO: improve this.
+        disc_reward = 0.0 # Discounted reward init
         for idx, _ in enumerate(range(n_steps)):
             action = self.select_action(state, epsilon)
             new_state, reward, done, _ = self.env.step(action)
@@ -118,6 +119,9 @@ class Agent:
         return (state_trajectory[0], action_trajectory[0], disc_reward, state_trajectory[-1], done)
             
         
+    # Calculate loss (MSE). If n_steps = 1, n_states is the next state (vanilla DQN), otherwise it is the n-th next state. 
+    # This means if n_steps != 1, the tuple this function returns becomes
+    # (state, action, discounted reward (G_t), final_state(after n steps))
     def calculate_loss(self, batch, n_steps):
 
         assert n_steps >= 1, "Cannot take less than one step"
@@ -205,7 +209,8 @@ if __name__ == "__main__":
 
             # TODO: implement Summary Writer
             writer.add_scalar("Reward per iteration", episode_reward, iter_no)
-            writer.add_scalar("Mean Reward 100", mean_reward, episode_no)
+            writer.add_scalar("Reward per 100 iteration", episode_reward, iter_no % 100 == 0)
+            writer.add_scalar("Mean Reward per 100 episodes", mean_reward, episode_no)
             
             
             episode_reward = 0.0
