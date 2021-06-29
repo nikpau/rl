@@ -1,7 +1,5 @@
 """
-This is nearly the same Agent as in the CartPole-v1_n_step.py but for convenience it's a seperate file.
-Apart from the tensorboard logging and the adapted rewards for the env it is not really different. 
-Also new net with more nodes in the second hidden layer. (I am not yet sure why this works)
+Noisy network implementation after Fortunaro, et. al (2018) "Noisy Networks for Exploration".
 """
 
 import gym
@@ -15,43 +13,76 @@ from torch.utils.tensorboard import SummaryWriter
 import numpy as np 
 import argparse # Maybe sometimes
 import collections
+import math
 
 # HYPERPARAMETERS ---------------------------------
 
 # Env
-ENV_NAME = "MountainCar-v0"
-ACTIONS = {0: 0, 1: 1, 2: 2}
-BUFFER_SIZE = 5000
-REWARD_BOUND = -110
+ENV_NAME = "CartPole-v0"
+ACTIONS = {0: 0, 1: 1}
+BUFFER_SIZE = 10000
+REWARD_BOUND = 195
 
 # Training
-EPSILON_START = 1.0
-GAMMA = 0.999
-EPSILON_DECAY = 0.999
-EPSILON_FINAL = 0.001
-BATCH_SIZE = 128
-TARGET_NET_UPDATE = 256
+GAMMA = 0.99
+BATCH_SIZE = 256
+TARGET_NET_UPDATE = 512
 LEARNING_RATE = 0.001
-N_STEPS = 4
+N_STEPS = 1
+SIGMA_INIT = 0.017
+
+# Noisy Layer ---------------------------------
+class NoisyLinear(nn.Linear):
+    def __init__(self, in_features: int, out_features: int, sigma_init: float, bias: bool):
+        super(NoisyLinear, self).__init__(in_features, out_features, bias=bias)
+        
+        self.sigma_weight = nn.Parameter(torch.full((out_features,in_features), sigma_init))
+        
+        self.register_buffer("epsilon_weight",torch.zeros(out_features, in_features))
+
+        if bias:
+            self.sigma_bias = nn.Parameter(torch.full((out_features,), sigma_init))
+            
+        self.register_buffer("epsilon_bias", torch.zeros(out_features))
+        self.reset_parameters()
+        
+    def reset_parameters(self):
+        std =  math.sqrt(1 / self.in_features)
+        self.weight.data.uniform_(-std,std)
+        self.bias.data.uniform_(-std,std)
+        
+    def forward(self, x):
+        self.epsilon_weight.normal_()
+        bias = self.bias
+        
+        if bias is not None:
+            self.epsilon_bias.normal_()
+            bias = bias + self.sigma_bias * self.epsilon_bias.data
+        
+        return F.linear(x, self.weight + self.sigma_weight * self.epsilon_weight.data, bias)
+
 
 # Network -------------------------------------
-
-class DQN(nn.Module):
+class NoisyDQN(nn.Module):
     def __init__(self, n_obs, n_actions):
-        super(DQN, self).__init__()
+        super(NoisyDQN, self).__init__()
         
         self.net = nn.Sequential(
-            nn.Linear(n_obs[0],32),
+            nn.Linear(n_obs[0],128),
             nn.ReLU(),
-            nn.Linear(32,128),
+            nn.Linear(128,128),
+            nn.ReLU()
+        )
+        
+        self.noisy = nn.Sequential(
+            NoisyLinear(128,128, sigma_init=SIGMA_INIT, bias=True),
             nn.ReLU(),
-            nn.Linear(128,64),
-            nn.ReLU(),
-            nn.Linear(64,n_actions)
+            NoisyLinear(128,n_actions,sigma_init=SIGMA_INIT, bias=True)
         )
         
     def forward(self, x):
-        return self.net(x)
+        net = self.net(x)
+        return self.noisy(net)
     
 # Experience Replay Buffer ----------------
 class ReplayBuffer:
@@ -83,11 +114,7 @@ class Agent:
 
         self.device = torch.device(device)
         
-    def select_action(self, state, epsilon):
-        # Epsison greedy policy
-        if np.random.rand() < epsilon: # take random action
-            return np.random.randint(self.env.action_space.n)
-        
+    def select_action(self, state):
         state = torch.FloatTensor(state).to(self.device)
         q_vals = self.net(state) # get q vals via network
         return torch.argmax(q_vals).item()
@@ -96,12 +123,12 @@ class Agent:
         self.buffer.add((state, action, reward, n_state, done))
 
     # Play n steps 
-    def play_n_steps(self, state, n_steps, epsilon, gamma):
+    def play_n_steps(self, state, n_steps, gamma):
         state_trajectory = [state] #store origin state in array
         action_trajectory = [] # Array for the n actions. Besides the first index it is never used. TODO: improve this.
         disc_reward = 0.0 # Discounted reward init
         for idx, _ in enumerate(range(n_steps)):
-            action = self.select_action(state, epsilon)
+            action = self.select_action(state)
             new_state, reward, done, _ = self.env.step(action)
 
             # Discount reward according to trajectory length
@@ -111,7 +138,7 @@ class Agent:
             action_trajectory.append(action)
 
             if done: # Check if episode is done before the end of the n steps. Return the episode so far
-                return (state_trajectory[0], action_trajectory[0], disc_reward, state_trajectory[-1],  done)
+                return (state_trajectory[0], action_trajectory[0], disc_reward, state_trajectory[-1], done)
 
             state = new_state # override current state
 
@@ -149,9 +176,9 @@ class Agent:
         new_q_vals[dones] = 0.0 # if episode terminated set the q values to zero as there is no next time step
         
         # calculate expected Q value
-        q_target = rewards_t + GAMMA**(n_steps) * new_q_vals # Bellman update
+        q_target = rewards_t + GAMMA**(n_steps) * new_q_vals # Bellman update with discount if callled
         
-        return nn.MSELoss()(q_vals,q_target)
+        return F.smooth_l1_loss(q_vals,q_target)
     
     def update_target_net(self):
         self.tgt_net.load_state_dict(self.net.state_dict())
@@ -166,14 +193,14 @@ if __name__ == "__main__":
     buffer = ReplayBuffer()
 
     # Init networks
-    net = DQN(env.observation_space.shape,env.action_space.n)
-    tgt_net = DQN(env.observation_space.shape,env.action_space.n)
+    net = NoisyDQN(env.observation_space.shape,env.action_space.n)
+    tgt_net = NoisyDQN(env.observation_space.shape,env.action_space.n)
     
     # Optimizer init
     optimizer = optim.Adam(net.parameters(), lr=LEARNING_RATE)
     
     # Init agent
-    agent = Agent(env,net,tgt_net, buffer, double=True)
+    agent = Agent(env,net,tgt_net, buffer, double=False)
     
     # Init Logger
     writer = SummaryWriter() # This is what uses the torch.utils.tensorboard btw 
@@ -183,17 +210,13 @@ if __name__ == "__main__":
     iter_no = 0
     episode_no = 0
 
-    # Epsilon for trainig
-    eps = EPSILON_START
-
     # Actual training loop
     while True:
         
         iter_no += 1
-        eps = max(EPSILON_FINAL, eps * EPSILON_DECAY)
         
         # Play n steps and return a transition tuple
-        state, action, reward, new_state, done = agent.play_n_steps(state,N_STEPS, eps, GAMMA)
+        state, action, reward, new_state, done = agent.play_n_steps(state,N_STEPS,GAMMA)
 
         # Add transition to replay buffer
         agent.memorize(state,action,reward, new_state,done)
@@ -205,12 +228,12 @@ if __name__ == "__main__":
             episode_no += 1
             rewards_list.append(episode_reward)
             mean_reward = np.mean(rewards_list[-100:])
-            print(f"Iteration: {iter_no}. Episode: {episode_no}. Mean reward: {round(mean_reward,2)}. Epsilon: {round(eps,2)}")
+            print(f"Iteration: {iter_no}. Episode: {episode_no}. Mean reward: {mean_reward:.2f}.")
 
             # TODO: implement Summary Writer
             writer.add_scalar("Reward per iteration", episode_reward, iter_no)
-            writer.add_scalar("Reward per 100 iteration", episode_reward, iter_no % 100 == 0)
-            writer.add_scalar("Mean Reward per 100 episodes", mean_reward, episode_no)
+            writer.add_scalar("Reward per episode", episode_reward, episode_no)
+            writer.add_scalar("Mean Reward at iteration", mean_reward, iter_no)
             
             
             episode_reward = 0.0
@@ -224,7 +247,7 @@ if __name__ == "__main__":
         
         if mean_reward > REWARD_BOUND:
             print("SOLVED")
-            torch.save(net.state_dict(), "DQN/" + ENV_NAME + "_nstep_weights.dat")
+            torch.save(net.state_dict(), "DQN/" + ENV_NAME + "_noisy_weights.dat")
             break
         
         optimizer.zero_grad()
