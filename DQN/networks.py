@@ -7,11 +7,13 @@ class NoisyNetwork(nn.Module):
         super(NoisyNetwork, self).__init__()
 
         self.net = nn.Sequential(
-            nn.Linear(n_obs[0],64),
+            nn.Linear(n_obs[0],128),
             nn.ReLU(),
-            nn.Linear(64,512),
+            nn.Linear(128,256),
             nn.ReLU(),
-            NoisyLinear(512,n_actions,bias=True)
+            NoisyLinear(256,128,bias=True),
+            nn.ReLU(),
+            NoisyLinear(128,n_actions, bias=True)
         )
 
         self.feature = nn.Linear(n_obs[0],128)

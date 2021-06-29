@@ -6,7 +6,7 @@ from torch.random import initial_seed
 
 
 class NoisyLinear(nn.Linear):
-    def __init__(self, in_features: int, out_features: int, bias: bool, sigma_init: float=0.017):
+    def __init__(self, in_features: int, out_features: int, bias: bool, sigma_init: float=0.4):
         super(NoisyLinear, self).__init__(in_features, out_features, bias=bias)
         
         self.sigma_weight = nn.Parameter(torch.full((out_features,in_features), sigma_init))

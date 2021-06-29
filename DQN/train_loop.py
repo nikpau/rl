@@ -13,15 +13,15 @@ import torch.optim as optim
 # Env
 ENV_NAME = "CartPole-v0"
 ACTIONS = {0: 0, 1: 1}
-BUFFER_SIZE = 10000
+BUFFER_SIZE = 5000
 REWARD_BOUND = 195
 
 # Training
 GAMMA = 0.99
 BATCH_SIZE = 128
-TARGET_NET_UPDATE = 150
+TARGET_NET_UPDATE = 256
 LEARNING_RATE = 0.001
-N_STEPS = 1
+N_STEPS = 3
 
 
 # Train until done.
