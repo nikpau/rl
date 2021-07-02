@@ -1,6 +1,6 @@
-from agents import NoisyAgent
-from replay_buffers import ReplayBufferUniform
-from networks import NoisyNetwork
+from agents import EpsGreedyAgent
+from replay_buffers import ProportionalPERBuffer_noHeap
+from networks import NormalNetwork
 from torch.utils.tensorboard import SummaryWriter
 import gym
 import torch
@@ -11,18 +11,27 @@ import torch.optim as optim
 # HYPERPARAMETERS ---------------------------------
 
 # Env
-ENV_NAME = "CartPole-v0"
-ACTIONS = {0: 0, 1: 1}
+ENV_NAME = "MountainCar-v0"
+ACTIONS = {0: 0, 1: 1, 2: 2}
 BUFFER_SIZE = 5000
-REWARD_BOUND = 195
+REWARD_BOUND = -110
 
 # Training
-GAMMA = 0.99
+GAMMA = 0.999
 BATCH_SIZE = 128
 TARGET_NET_UPDATE = 256
-LEARNING_RATE = 0.001
-N_STEPS = 3
+LEARNING_RATE = 0.01
+N_STEPS = 5
 
+# For e-greedy strategy
+EPSILON_START = 1.0
+EPSILON_DECAY = 0.9995
+EPSILON_FINAL = 0.001
+
+# PER Buffer 
+ALPHA = 0.5
+BETA_INIT = 0.5
+BETA_INC = 0.0001
 
 # Train until done.
 if __name__ == "__main__":
@@ -32,17 +41,19 @@ if __name__ == "__main__":
     state = env.reset() #first state
     
     # Init Replay Buffer    
-    buffer = ReplayBufferUniform(buffer_size=BUFFER_SIZE)
+    buffer = ProportionalPERBuffer_noHeap(buffer_size=BUFFER_SIZE, alpha=ALPHA,beta_init=BETA_INIT,
+                                          beta_inc=BETA_INC,state_dim=env.observation_space.shape[0],
+                                          action_dim=env.action_space.n)
 
     # Init networks
-    net = NoisyNetwork(env.observation_space.shape,env.action_space.n)
-    tgt_net = NoisyNetwork(env.observation_space.shape,env.action_space.n)
+    net = NormalNetwork(env.observation_space.shape,env.action_space.n)
+    tgt_net = NormalNetwork(env.observation_space.shape,env.action_space.n)
     
     # Optimizer init
     optimizer = optim.Adam(net.parameters(), lr=LEARNING_RATE)
     
     # Init agent
-    agent = NoisyAgent(env,net,tgt_net, buffer, double=False)
+    agent = EpsGreedyAgent(env,net,tgt_net, buffer, double=True)
     
     # Init Logger
     writer = SummaryWriter() # This is what uses the torch.utils.tensorboard btw 
@@ -51,14 +62,19 @@ if __name__ == "__main__":
     episode_reward = 0.0
     iter_no = 0
     episode_no = 0
-
+    
+    # Epsilon for trainig
+    eps = EPSILON_START
+    
     # Actual training loop
     while True:
         
         iter_no += 1
+        eps = max(EPSILON_FINAL, eps * EPSILON_DECAY)
+        
         
         # Play n steps and return a transition tuple
-        state, action, reward, new_state, done = agent.play_n_steps(state,N_STEPS,GAMMA)
+        state, action, reward, new_state, done = agent.play_n_steps(state,N_STEPS,eps,GAMMA)
 
         # Add transition to replay buffer
         agent.memorize(state,action,reward, new_state,done)

@@ -86,7 +86,7 @@ class NoisyAgent:
         self.tgt_net.load_state_dict(self.net.state_dict())
         
 # Using e-greedy policy for action selecion
-class EpsGreegyAgent:
+class EpsGreedyAgent:
     def __init__(self, env, net, tgt_net, buffer, double=False, device ="cpu"):
         self.net = net
         self.tgt_net = tgt_net
@@ -108,7 +108,7 @@ class EpsGreegyAgent:
         return torch.argmax(q_vals).item()
     
     def memorize(self, state, action, reward, n_state, done):
-        self.buffer.add((state, action, reward, n_state, done))
+        self.buffer.add(state, action, reward, n_state, done)
 
     # Play n steps 
     def play_n_steps(self, state, n_steps, epsilon, gamma):
@@ -138,7 +138,12 @@ class EpsGreegyAgent:
 
         assert n_steps >= 1, "Cannot take less than one step"
 
-        states, actions, rewards, n_states, dones = batch # unpack batch to seperate lists 
+        if self.buffer.type == "PER":
+            *transition, weights, idx = batch
+            states, actions, rewards, n_states, dones = transition
+            weights = torch.tensor(weights)
+        else:
+            states, actions, rewards, n_states, dones = batch # unpack batch to seperate lists 
         
         # convert to tensors
         states_t = torch.tensor(states).to(self.device)
@@ -162,6 +167,13 @@ class EpsGreegyAgent:
         
         # calculate expected Q value
         q_target = rewards_t + gamma**(n_steps) * new_q_vals # Bellman update
+        
+        # Update priorities if the buffer uses prioritization
+        if self.buffer.type == "PER":
+            td_error = torch.abs(q_target - q_vals)
+            self.buffer.update_priority(idx = idx, td_error = td_error)
+            cum_sq_error = (q_vals - q_target) ** 2
+            return torch.mean(cum_sq_error * weights) # Weigh each loss with its importance sampling weight
         
         return nn.MSELoss()(q_vals,q_target)
     
