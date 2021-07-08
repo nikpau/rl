@@ -59,7 +59,7 @@ class MinHeap:
             self.perc_down(i)
             i = i - 1
             
-h=MinHeap()
-a=[(5,88),(3,6),(6,12),(5,7),(3,8)]
-h.build_heap(a)
-print(h.heaplist)
+#h=MinHeap()
+#a=[(5,88),(3,6),(6,12),(5,7),(3,8)]
+#h.build_heap(a)
+#print(h.heaplist)

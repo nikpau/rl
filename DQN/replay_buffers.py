@@ -11,9 +11,10 @@ import numpy as np
 
 # Uniform replay buffer from which uniform sampling is performed
 class ReplayBufferUniform:
-    def __init__(self, buffer_size: int):
+    def __init__(self, buffer_size: int, batch_size: int):
         self.buffer_size = buffer_size
         self.buffer = collections.deque(maxlen=self.buffer_size) # Initialize buffer
+        self.batch_size = batch_size
 
         # Give type for distinguishing in the agent functions 
         self.type = "UNI"
@@ -24,14 +25,15 @@ class ReplayBufferUniform:
     def len(self):
         return len(self.buffer)
         
-    def sample(self, batch_size):
-        indices = np.random.choice(self.buffer_size, batch_size, replace = False) # replace = False makes it O(n)
+    def sample(self):
+        indices = np.random.choice(self.buffer_size, self.batch_size, replace = False) # replace = False makes it O(n)
         states, actions, rewards, n_states, dones = zip(*[self.buffer[index] for index in indices])
         return np.array(states, dtype=np.float32), np.array(actions, dtype=np.int64), \
             np.array(rewards, dtype=np.float32), np.array(n_states, dtype=np.float32), np.array(dones)
             
 class PropotionalPERBuffer:
-    def __init__(self, buffer_size: int, alpha: float, beta_init: float, beta_inc: float, heapify_freq: int):
+    def __init__(self, buffer_size: int, alpha: float, beta_init: float, beta_inc: float, heapify_freq: int,
+                 batch_size: int):
         
         self.buffer_size = buffer_size
         self.currSize = 0
@@ -42,15 +44,28 @@ class PropotionalPERBuffer:
         self.beta_inc = beta_inc
         self.max_prio = 1.0
         
+        # Give type for distinguishing in the agent functions
+        self.type = "PER"
+
+        
         # This is the binary heap for the transition tuple
         # (state, action, reward, n_state, done, prio)
-        self.heap = bin_heap.MinHeap() # Heap init
-        self.heap_buffer = [(0,0,0,0,0,self.max_prio)] * self.buffer_size
+        self.heap = bin_heap.MinHeap(max_size=self.buffer_size, key_idx=5) # Heap init
+        self.heap_buffer = [(0,0,0,0,0,-self.max_prio)] * self.buffer_size
         self.heap.build_heap(self.heap_buffer) # Create MinHeap from Buffer List
         self.heapify_freq = heapify_freq # Frequency to re-heapify to avoid getting the too unbalanced
 
         # Pointer to index of current filling
         self.fill_ptr = 0
+
+        # Define the batch size beforehand
+        self.batch_size = batch_size
+
+        chunk_gen = chunk(self.heap.heaplist, self.buffer_size // self.batch_size)
+        
+    def chunk(self, chunk_size):
+        for i in range(0,len(self.buffer_size), chunk_size):
+            yield self.heap.heaplist[i:i+chunk_size]
         
     def len(self):
         return self.currSize
@@ -68,7 +83,8 @@ class PropotionalPERBuffer:
         self.fill_ptr = (self.fill_ptr + 1) % self.buffer_size
         self.currSize = min(self.currSize + 1, self.buffer_size)
         
-    def sample(self, batch_size):
+    def sample(self):
+        
         
         # Increase beta by beta_inc
         self.beta = min(1.,self.beta + self.beta_inc)
@@ -78,7 +94,7 @@ class PropotionalPERBuffer:
         batch = self.heap.heaplist[:batch_size]
         
         # Take the sampled batch to calculate IS weights
-        prios = [x[5] for x in batch] # Extract prios
+        prios = [-x[5] for x in batch] # Extract prios and reverse sign as they are saved with flipped sign
         weights = [(x * self.currSize)**(-self.beta) for x in prios]
 
         # TODO: Finish Impl....
