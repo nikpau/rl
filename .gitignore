@@ -1,6 +1,7 @@
 .vscode/
 .venv/
 .git/
+.ipynb_checkpoints/
 runs/
-DQN/__pycache__
-DDPG/__pycache__
+DQN/__pycache__/
+DDPG/__pycache__/

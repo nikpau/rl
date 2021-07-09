@@ -17,6 +17,11 @@ class DDPGAgent:
         self.actor_optim = actor_optim
         self.critic_optim = critic_optim
 
+        # For logging purposes safe the actor and critic loss at each 
+        # optimizer step
+        self.actor_loss = 0.0
+        self.critic_loss = 0.0
+
         # CPU oder GPU ("cuda")
         assert device in ["cpu", "cuda"], "Unknown device"
         self.device = device
@@ -70,6 +75,9 @@ class DDPGAgent:
             target_Q = reward + gamma * target_Q
 
         critic_loss = F.mse_loss(q_val, target_Q)
+        
+        # Log the loss
+        self.critic_loss = critic_loss.item()
 
         critic_loss.backward()
         self.critic_optim.step()
@@ -87,6 +95,8 @@ class DDPGAgent:
         # Negative sign for gradient ascent.
         # Becomes aprox performance measure by chain rule
         actor_loss = -self.critic(state,current_actions).mean()
+
+        self.actor_loss = actor_loss.item()
 
         actor_loss.backward()
         self.actor_optim.step()

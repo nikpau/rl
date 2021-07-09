@@ -38,3 +38,8 @@ class ReplayBufferUniform:
 
     def len(self):
         return self.size
+
+# Rank based Priority Experience Replay Buffer after Schaul et al. (2016)
+class Rank_PER_Buffer:
+    def __init__(self) -> None:
+        pass

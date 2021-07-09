@@ -5,16 +5,21 @@ from DDPG_noise import GaussianNoise
 from DDPG_replay_buffers import ReplayBufferUniform
 import gym 
 from torch.utils.tensorboard import SummaryWriter
-import torch
+import csv
 import numpy as np 
 import torch.nn as nn
 import copy
 
+"""TODO:
+    - Implement a logger and multithreading"""
+# torch.set_num_threads(15)
 
 # Hyperparameter
-ENV_NAME = "Pendulum-v0"
-MAX_ACTION = 2
-MIN_ACTION = -2
+ENV_NAME = "MountainCarContinuous-v0"
+MAX_ACTION = 5
+MIN_ACTION = -5
+
+NOISE_SIGMA = 0.3
 
 GAMMA = 0.99
 TAU = 0.001
@@ -23,7 +28,7 @@ LEARNING_RATE_ACTOR = 10e-4
 LEARNING_RATE_CRITIC = 10e-3
 BUFFER_SIZE = 100000
 BATCH_SIZE = 64
-MAX_EPISODE_LENGTH = 199
+MAX_EPISODE_LENGTH = 200 
 
 
 if __name__=="__main__":
@@ -46,7 +51,7 @@ if __name__=="__main__":
     critic_optim = optim.Adam(critic.parameters(),lr=LEARNING_RATE_CRITIC)
 
     # Gaussian Noise
-    g_noise = GaussianNoise(env.action_space.shape[0])
+    g_noise = GaussianNoise(env.action_space.shape[0], 0, NOISE_SIGMA)
 
     # Agent
     agent = DDPGAgent(env, buffer, actor, critic, 
@@ -60,6 +65,10 @@ if __name__=="__main__":
     episode_step_counter = 0
     episode_counter = 0
     iter_no = 0
+    iter_list = []
+    actor_loss = []
+    critic_loss = []
+    mean_reward_list = []
 
     while True:
 
@@ -76,7 +85,7 @@ if __name__=="__main__":
         episode_reward += reward
 
         # Set done to True if max steps per episode is reached
-        done = True if episode_step_counter%MAX_EPISODE_LENGTH==0 else done
+        done = True if episode_step_counter % MAX_EPISODE_LENGTH==0 else done
 
         # Write the transition tuple into the replay buffer
         agent.memorize(state, action, reward, new_state, done)
@@ -86,27 +95,48 @@ if __name__=="__main__":
 
         # End of episode handling
         if done:
-            state = env.reset()
+            state = env.reset() # Reset env
             episode_reward_list.append(episode_reward)
-            mean_reward = np.mean(episode_reward_list[-100:])
-            writer.add_scalar("Episode Reward", episode_reward)
-            writer.add_scalar("Iteration", iter_no)
-            writer.add_scalar("Mean Reward", mean_reward)
-            print(f"Iteration {iter_no} | Episode {episode_counter} | Episode Reward {episode_reward:.2f} | Mean Reward {mean_reward:.2f}")
-            print("Fitting...", end="\r")
+
+
             episode_counter += 1
             episode_step_counter = 0
             episode_reward = 0
 
+        # Do not begin training until buffer is filled 
+        # (May be abandoned as training can already begin with filling buffer)
         if buffer.len() < BUFFER_SIZE:
-            print("Filling buffer...", end="\r")
+            print(f"Filling buffer {iter_no} / {BUFFER_SIZE}" , end="\r")
             continue
 
+        # Logging
+        if iter_no % MAX_EPISODE_LENGTH == 0:
+            mean_reward = np.mean(episode_reward_list[-100:]) # Calculate a mean from the last 100 rewards
+            mean_reward_list.append(mean_reward)
+            iter_list.append(iter_no)
+            actor_loss.append(agent.actor_loss)
+            critic_loss.append(agent.critic_loss)
+
+            print(f"Iteration {iter_no} | Episode {episode_counter} | Episode Reward {episode_reward:.2f} | Mean Reward {mean_reward:.2f}")
+
+            if iter_no % 10000 == 0:
+                rows = zip(iter_list, mean_reward_list, actor_loss, critic_loss)
+                with open("DDPG/" + ENV_NAME + "_log.csv", "w") as f:
+                    wr = csv.writer(f, quoting=csv.QUOTE_ALL)
+                    wr.writerow(["iter_no","mean_reward","actor_loss", "ctitc_loss"])
+                    for row in rows:
+                        wr.writerow(row)
+
+        # TODO: Implement other mechanism as the boundary of 0 will never be met. 
+        # Maybe safe the net every n iterations / episodes
         if mean_reward > REWARD_BOUND:
             print(f"Solved in {episode_counter} episodes.")
 
+        # Stdout prints
+        print("Fitting...", end="\r")
+
         critic_optim.zero_grad()
         actor_optim.zero_grad()
-        batch = buffer.sample()
+        batch = buffer.sample() # Sample BATCH_SIZE transitions
         agent.calculate_loss_and_train(batch, GAMMA)
-        agent.update_target_networks(TAU)
+        agent.update_target_networks(TAU) # Polyak update
