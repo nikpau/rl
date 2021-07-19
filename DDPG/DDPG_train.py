@@ -2,9 +2,12 @@ from torch import optim
 from DDPG_agents import DDPGAgent
 from DDPG_networks import Actor, Critic
 from DDPG_noise import GaussianNoise
-from DDPG_replay_buffers import ReplayBufferUniform
+from DDPG_replay_buffers import Rank_Based_PER_Buffer
 import gym 
-from torch.utils.tensorboard import SummaryWriter
+import pybulletgym
+import time 
+import os
+import torch
 import csv
 import numpy as np 
 import torch.nn as nn
@@ -12,33 +15,35 @@ import copy
 
 """TODO:
     - Implement a logger and multithreading"""
-# torch.set_num_threads(15)
+torch.set_num_threads(12)
 
 # Hyperparameter
-ENV_NAME = "MountainCarContinuous-v0"
-MAX_ACTION = 5
-MIN_ACTION = -5
+ENV_NAME = "InvertedDoublePendulumMuJoCoEnv-v0"
+MAX_ACTION = 1
+MIN_ACTION = -1
 
 NOISE_SIGMA = 0.3
 
 GAMMA = 0.99
 TAU = 0.001
-REWARD_BOUND = 90
+REWARD_BOUND = 20000
 LEARNING_RATE_ACTOR = 10e-4
 LEARNING_RATE_CRITIC = 10e-3
 BUFFER_SIZE = 100000
-BATCH_SIZE = 64
-MAX_EPISODE_LENGTH = 200 
+BATCH_SIZE = 256
+MAX_EPISODE_LENGTH = 1000
+
+timestamp = time.time()
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
 
     env = gym.make(ENV_NAME)
     state = env.reset()
 
     # Init replay buffer
-    buffer = ReplayBufferUniform(env.action_space.shape[0],env.observation_space.shape[0],
-    BUFFER_SIZE, BATCH_SIZE, "cpu")
+    buffer = Rank_Based_PER_Buffer(state_dim=env.observation_space.shape[0], action_dim=env.action_space.shape[0],
+                                   alpha=0.5,beta=0.5, beta_inc=1e-5, max_size=BUFFER_SIZE, batch_size=BATCH_SIZE,device="cpu")
     # Actor and critic networks
     actor = Actor(env.observation_space.shape[0],env.action_space.shape[0])
     actor_target = copy.deepcopy(actor)
@@ -56,9 +61,6 @@ if __name__=="__main__":
     # Agent
     agent = DDPGAgent(env, buffer, actor, critic, 
     actor_target, critic_target, actor_optim, critic_optim, g_noise, "cpu")
-
-    # SummaryWriter
-    writer = SummaryWriter()
 
     episode_reward_list = []
     episode_reward = 0.0
@@ -120,10 +122,13 @@ if __name__=="__main__":
             print(f"Iteration {iter_no} | Episode {episode_counter} | Episode Reward {episode_reward:.2f} | Mean Reward {mean_reward:.2f}")
 
             if iter_no % 10000 == 0:
+                torch.save(agent.actor.state_dict(),ENV_NAME + timestamp +"_actor.dat")
+                if not os.path.exists("runs"):
+                    os.mkdir("DDPG/runs")
                 rows = zip(iter_list, mean_reward_list, actor_loss, critic_loss)
-                with open("DDPG/" + ENV_NAME + "_log.csv", "w") as f:
+                with open("DDPG/runs/" + ENV_NAME + "_" + timestamp + ".csv", "w") as f:
                     wr = csv.writer(f, quoting=csv.QUOTE_ALL)
-                    wr.writerow(["iter_no","mean_reward","actor_loss", "ctitc_loss"])
+                    wr.writerow(["iter_no","mean_reward","actor_loss", "critc_loss"])
                     for row in rows:
                         wr.writerow(row)
 

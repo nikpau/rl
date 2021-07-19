@@ -3,5 +3,5 @@
 .git/
 .ipynb_checkpoints/
 runs/
-DQN/__pycache__/
-DDPG/__pycache__/
+**/__pycache__/
+**/*.csv
