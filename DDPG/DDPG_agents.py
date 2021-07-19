@@ -56,7 +56,11 @@ class DDPGAgent:
         return n_state, reward, done
 
     def calculate_loss_and_train(self, batch, gamma):
-        state, action, reward, n_state, done = batch
+        
+        if self.buffer.name == "RankPER":
+            state, action, reward, n_state, done, weights, idx = batch
+        else:
+            state, action, reward, n_state, done = batch
 
         # Calculate current estimated Q-value
         q_val = self.critic(state, action)
@@ -73,8 +77,13 @@ class DDPGAgent:
             target_Q[done] = 0.0
 
             target_Q = reward + gamma * target_Q
-
-        critic_loss = F.mse_loss(q_val, target_Q)
+            
+        if self.buffer.name == "RankPER":
+            self.buffer.update_prio(idx = idx, TD_error = torch.abs(target_Q - q_val))
+            sq_TD_error = (q_val - target_Q) ** 2
+            critic_loss = torch.mean(sq_TD_error * weights.detach())
+        else:
+            critic_loss = F.mse_loss(q_val, target_Q)
         
         # Log the loss
         self.critic_loss = critic_loss.item()

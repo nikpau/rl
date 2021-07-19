@@ -1,6 +1,6 @@
 """
 This heap is specialized to the use with an PER buffer. In my implementation the heap will consist of tuples
-that have six entries each. The value imporant for the heap will be the 6th (sampling priority). Therefore
+that have six entries each. The value imporant for the heap will be the key_idx (sampling priority). Therefore
 this heap compares those values to order itself.
 """
 
@@ -8,7 +8,6 @@ class MinHeap:
     def __init__(self, max_size: int, key_idx: int):
         # Use leading zero as parent for whole tree as this will enable integer division later on
         self.heaplist = [0]
-        self.size = 0
         self.max_size = max_size
         self.key_idx = key_idx # key element of the tuple to use as the comparing value by the heap
         
@@ -21,8 +20,7 @@ class MinHeap:
             i = i // 2
             
     def insert(self,k):
-        self.heaplist.append(k) # Append value to heap
-        self.size += 1 # Increase size by one
+        self.heaplist[self.max_size] # Replace last value in heap
         self.perc_up(self.size) # Walk up nodes until the value fits
         
     def perc_down(self,i):
@@ -59,7 +57,7 @@ class MinHeap:
             self.perc_down(i)
             i = i - 1
             
-#h=MinHeap()
-#a=[(5,88),(3,6),(6,12),(5,7),(3,8)]
-#h.build_heap(a)
-#print(h.heaplist)
+h=MinHeap()
+a=[(5,88),(3,6),(6,12),(5,7),(3,8)]
+h.build_heap(a)
+print(h.heaplist)

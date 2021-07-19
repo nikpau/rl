@@ -61,8 +61,9 @@ class PropotionalPERBuffer:
         # Define the batch size beforehand
         self.batch_size = batch_size
 
-        chunk_gen = chunk(self.heap.heaplist, self.buffer_size // self.batch_size)
-        
+        chunk_gen = self.chunk(self.heap.heaplist, self.buffer_size // self.batch_size)
+    
+    # Generator function for splitting the heap into chunks of size batch_size
     def chunk(self, chunk_size):
         for i in range(0,len(self.buffer_size), chunk_size):
             yield self.heap.heaplist[i:i+chunk_size]

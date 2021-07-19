@@ -4,20 +4,27 @@ But soon this will be a performance plotter for the csv log files
 I generate. 
 """
 
-
-import matplotlib
 import matplotlib.pyplot as plt 
 import numpy as np 
 import pandas as pd
 
 class Plotter:
-    def __init__(self, csv_log) -> None:
+    def __init__(self, csv_log):
 
-        data = pd.read_csv(csv_log)
+        # Import csv file into a pandas data frame
+        self.data = pd.read_csv(csv_log)
 
-        n_cols = len(data.columns)
-
-        x = data.iloc[:,0]
+        # Define column numbers and x axis to be the 0th dim
+        self.n_cols = len(self.data.columns)
+        self.x = self.data.iloc[:,0]
+        
+        print(f"Inititalized {self.n_cols - 1} plots...")
+        
+    def draw(self):
+        fig, axes = plt.subplots(1,self.n_cols - 1)
+        
+        for plot in range(self.n_cols - 1):
+            axes[0,plot] = self.data.plot(self.x, self.data.iloc[:, plot + 1])
 
 
 
