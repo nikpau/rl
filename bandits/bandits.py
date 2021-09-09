@@ -43,6 +43,9 @@ class OSSBandit():
         self.probs = probs
         self.ptr = 0
 
+        self.curr_estimator_var = 0.001
+        self.curr_max_mu = 0
+
         self.exp_value = [0.0] * arms
         self.var = [0.001] * arms
         self.counts = [1] * arms
@@ -95,13 +98,27 @@ class OSSBandit():
         values = [ind*mu for ind,mu in zip(arms_to_compare,self.exp_value)]
 
         exp_est = sum(values) / n_ones
+        
+        self.curr_estimator_var = self._estimator_variance(exp_est)
+        self.curr_max_mu = exp_est
 
         return exp_est
-
+    
+    def _estimator_variance(self, new_max_mu):
+        curr_count = self.counts[np.argmax(self.exp_value)]
+        curr_var = self.curr_estimator_var
+        curr_max_mu = self.curr_max_mu
+        if curr_count <= 2:
+            return 0.001
+        else:
+            new_var = ((curr_count - 2) / (curr_count - 1)) * curr_var + ((1/curr_count) * (new_max_mu - curr_max_mu)**2)
+        
+        return new_var
+        
     def error(self):
         true_prob = max(self.probs)
-        max_mu_est = self.max_mu()
-        rmse = np.sqrt((max_mu_est - true_prob)**2 + self.var[np.argmax(self.exp_value)])
+        max_mu_est = self.curr_max_mu
+        rmse = np.sqrt((max_mu_est - true_prob)**2 + self.curr_estimator_var)
         bias = max_mu_est - true_prob
         return rmse, bias
 
@@ -115,6 +132,9 @@ class MEBandit():
         self.probs = probs
         self.ptr = 0
 
+        self.curr_estimator_var = 0.001
+        self.curr_max_mu = 0
+        
         self.exp_value = [0.0] * arms
         self.var = [0.001] * arms
         self.counts = [1] * arms
@@ -151,12 +171,26 @@ class MEBandit():
         max_arm = np.argmax(self.exp_value) # select the index of the highest estimate
         max_val = self.exp_value[max_arm] # select the highest estimate
 
+        self.curr_max_mu = max_val
+        self.curr_estimator_var = self._estimator_variance(max_val)
+        
         return max_val
 
+    def _estimator_variance(self, new_max_mu):
+        curr_count = self.counts[np.argmax(self.exp_value)]
+        curr_var = self.curr_estimator_var
+        curr_max_mu = self.curr_max_mu
+        if curr_count <= 2:
+            return 0.001
+        else:
+            new_var = ((curr_count - 2) / (curr_count - 1)) * curr_var + ((1/curr_count) * (new_max_mu - curr_max_mu)**2)
+        
+        return new_var
+        
     def error(self):
         true_prob = max(self.probs)
         max_mu_est = self.max_mu()
-        rmse = np.sqrt((max_mu_est - true_prob)**2 + self.var[np.argmax(self.exp_value)])
+        rmse = np.sqrt((max_mu_est - true_prob)**2 + self.curr_estimator_var)
         bias = max_mu_est -true_prob
         return rmse, bias
 
@@ -169,6 +203,9 @@ class DEBandit():
         self.arms = arms
         self.probs = probs
         self.ptr = 0
+
+        self.curr_estimator_var = 0.001
+        self.curr_max_mu = 0
 
         self.var_A = [0.001] * arms
         self.var_B = [0.001] * arms
@@ -231,12 +268,26 @@ class DEBandit():
         max_arm_A = np.argmax(self.exp_value_A) # select the index of the highest estimate
         val_B = self.exp_value_B[max_arm_A] # select the highest estimate from the other sample
 
+        self.curr_max_mu = val_B
+        self.curr_estimator_var = self._estimator_variance(val_B)
+
         return val_B
+
+    def _estimator_variance(self, new_max_mu):
+        curr_count = self.counts_A[np.argmax(self.exp_value_A)] + self.counts_B[np.argmax(self.exp_value_B)]
+        curr_var = self.curr_estimator_var
+        curr_max_mu = self.curr_max_mu
+        if curr_count <= 2:
+            return 0.001
+        else:
+            new_var = ((curr_count - 2) / (curr_count - 1)) * curr_var + ((1/curr_count) * (new_max_mu - curr_max_mu)**2)
+        
+        return new_var
 
     def error(self):
         true_prob = max(self.probs)
         max_mu_est = self.max_mu()
-        rmse = np.sqrt((max_mu_est - true_prob)**2 + (self.var_A[np.argmax(self.exp_value_A)] + self.var_B[np.argmax(self.exp_value_B)])/2)
+        rmse = np.sqrt((max_mu_est - true_prob)**2 + self.curr_estimator_var)
         bias = max_mu_est - true_prob
         return rmse, bias
 

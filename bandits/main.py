@@ -17,9 +17,9 @@ if __name__ == "__main__":
     ITERATIONS = 100_000
     TRIALS = 10
 
-    n_arms = 10
+    n_arms = 5
     alpha = 0.05
-    probs = [0.5] *n_arms 
+    probs = [0.1,0.2,0.3,0.4,0.5] *n_arms 
 
     # Maximum estimator
     me_bandit = MEBandit(n_arms, probs)
@@ -59,7 +59,7 @@ if __name__ == "__main__":
     #Plotting
     fig, ax = plt.subplots(2, 1, figsize=(16, 9))
 
-    fig.suptitle(f"Internet Ads in a MAB Setting | Normally distributed reward")
+    fig.suptitle(f"Internet Ads in a MAB Setting | Bernoulli rewards")
 
     ax[0].bar(alg_names,mse)
     ax[0].set_title("Root Mean Square Error")
