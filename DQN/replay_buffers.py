@@ -92,7 +92,7 @@ class PropotionalPERBuffer:
         
         # Sample from the buffer.
         # We do not need to filter for priorities as the Heap is already organized
-        batch = self.heap.heaplist[:batch_size]
+        batch = self.heap.heaplist[:self.batch_size]
         
         # Take the sampled batch to calculate IS weights
         prios = [-x[5] for x in batch] # Extract prios and reverse sign as they are saved with flipped sign

@@ -2,10 +2,10 @@ from torch import optim
 from DDPG_agents import DDPGAgent
 from DDPG_networks import Actor, Critic
 from DDPG_noise import GaussianNoise
-from DDPG_replay_buffers import Rank_Based_PER_Buffer
+from DDPG_replay_buffers import Rank_Based_PER_Buffer, ReplayBufferUniform
 import gym 
 import pybulletgym
-import time 
+import datetime 
 import os
 import torch
 import csv
@@ -33,7 +33,7 @@ BUFFER_SIZE = 100000
 BATCH_SIZE = 256
 MAX_EPISODE_LENGTH = 1000
 
-timestamp = time.time()
+timestamp = '{:%Y-%m-%d %H:%M:%S}'.format(datetime.datetime.now())
 
 
 if __name__ == "__main__":
@@ -43,7 +43,8 @@ if __name__ == "__main__":
 
     # Init replay buffer
     buffer = Rank_Based_PER_Buffer(state_dim=env.observation_space.shape[0], action_dim=env.action_space.shape[0],
-                                   alpha=0.5,beta=0.5, beta_inc=1e-5, max_size=BUFFER_SIZE, batch_size=BATCH_SIZE,device="cpu")
+                                   max_size=BUFFER_SIZE, batch_size=BATCH_SIZE,device="cpu",
+                                   alpha=0.8, beta=0.5, beta_inc=1e-6)
     # Actor and critic networks
     actor = Actor(env.observation_space.shape[0],env.action_space.shape[0])
     actor_target = copy.deepcopy(actor)
@@ -71,6 +72,10 @@ if __name__ == "__main__":
     actor_loss = []
     critic_loss = []
     mean_reward_list = []
+    
+    if not os.path.exists("DDPG/runs"):
+        os.mkdir("DDPG/runs")
+    os.mkdir("DDPG/runs/" + str(timestamp))
 
     while True:
 
@@ -122,11 +127,10 @@ if __name__ == "__main__":
             print(f"Iteration {iter_no} | Episode {episode_counter} | Episode Reward {episode_reward:.2f} | Mean Reward {mean_reward:.2f}")
 
             if iter_no % 10000 == 0:
-                torch.save(agent.actor.state_dict(),ENV_NAME + timestamp +"_actor.dat")
-                if not os.path.exists("runs"):
-                    os.mkdir("DDPG/runs")
+                torch.save(agent.actor.state_dict(),"DDPG/runs/" + ENV_NAME + str(timestamp) +"_actor.dat")
+                torch.save(agent.critic.state_dict(),"DDPG/runs/" + ENV_NAME + str(timestamp) +"_critic.dat")
                 rows = zip(iter_list, mean_reward_list, actor_loss, critic_loss)
-                with open("DDPG/runs/" + ENV_NAME + "_" + timestamp + ".csv", "w") as f:
+                with open("DDPG/runs/" + str(timestamp) + "/" + ENV_NAME + "_log.csv", "w") as f:
                     wr = csv.writer(f, quoting=csv.QUOTE_ALL)
                     wr.writerow(["iter_no","mean_reward","actor_loss", "critc_loss"])
                     for row in rows:
