@@ -15,7 +15,6 @@ def simulate(algorithm, iterations, trials):
     for trial in range(trials):
 
         algorithm.reset()
-        #trials.append(trial)
 
         for iter_no in range(iterations):
 
@@ -36,7 +35,7 @@ def simulate(algorithm, iterations, trials):
             max_mu = algorithm.max_mu() # Calculate estimated max_mu
             rmse, bias = algorithm.error() # MSE and bias to the largest true expected value
 
-            print(f"iter_no: {iter_no} | trial: {trial+1} | max_mu_estimate:{round(max_mu,4)}")
+            print(f"Alg: {algorithm.name} | Iter_no: {iter_no} | Trial_no: {trial+1} | Max_mu_estimate:{round(max_mu,4)}")
             
         rmse_list.append(rmse)
         bias_list.append(bias)

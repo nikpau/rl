@@ -39,7 +39,7 @@ if __name__ == "__main__":
       results_me = simulate(me_bandit,iterations=ITERATIONS,trials=TRIALS)
       df_me = format_results(results_me)
 
-      rmse_me = df_me["mse"].iloc[-1]
+      rmse_me = df_me["rmse"].iloc[-1]
       bias_me = df_me["bias"].iloc[-1]
 
       # Double estimator
@@ -47,7 +47,7 @@ if __name__ == "__main__":
       results_de = simulate(de_bandit,iterations=ITERATIONS,trials=TRIALS)
       df_de = format_results(results_de)
 
-      rmse_de = df_de["mse"].iloc[-1]
+      rmse_de = df_de["rmse"].iloc[-1]
       bias_de = df_de["bias"].iloc[-1]
 
       # OSS Estimator
@@ -55,7 +55,7 @@ if __name__ == "__main__":
       results_oss = simulate(oss_bandit,iterations=ITERATIONS,trials=TRIALS)
       df_oss = format_results(results_oss)
 
-      rmse_oss = df_oss["mse"].iloc[-1]
+      rmse_oss = df_oss["rmse"].iloc[-1]
       bias_oss = df_oss["bias"].iloc[-1]
 
       # Concat to mse and bias vector

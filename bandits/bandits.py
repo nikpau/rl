@@ -3,10 +3,16 @@ import scipy.stats as sc
 import numpy as np 
 
 """
-Multi-armed Bandit with an e-greedy Agent and a Bernoulli modeled reward structure.
+Multi-armed Bandits with a Bernoulli modeled reward structure.
+Sequential exploration (each arm pulled equally often)
+Focus lies in identifying the maximum expected value via different algorithms. 
+
+All mathematically relevant code is found in the 'max_mu' functions. Rest is trivial.
 """
 class OSSBandit():
     def __init__(self, arms, alpha, probs) -> None:
+
+        self.name = "OSS"
         self.arms = arms
         self.alpha = alpha
         self.probs = probs
@@ -44,7 +50,6 @@ class OSSBandit():
         if curr_count <= 2:
             new_var = 0.001
         else:
-            #new_var = ((curr_count - 2) / (curr_count - 1)) * curr_var + ((1/curr_count) * (reward - curr_exp)**2)
             new_var = _running_variance(curr_count,curr_var,curr_exp,reward)
         self.exp_value[chosen_arm] = new_exp
         self.var[chosen_arm] = new_var
@@ -68,7 +73,7 @@ class OSSBandit():
 
         exp_est = sum(values) / n_ones
         
-        self.curr_estimator_var = self._estimator_variance(exp_est)
+        self.curr_estimator_var = self._estimator_variance(exp_est) # Update estimator variance
         self.curr_max_mu = exp_est
 
         return exp_est
@@ -95,8 +100,11 @@ class OSSBandit():
         prob = self.probs[chosen_arm]
         return np.random.binomial(1,prob)
 
+# Maximum estimator. Selection via max_i mu_{i} = max_i \hat{mu}_i
 class MEBandit():
     def __init__(self, arms, probs) -> None:
+        
+        self.name = "ME"
         self.arms = arms
         self.probs = probs
         self.ptr = 0
@@ -167,8 +175,11 @@ class MEBandit():
         prob = self.probs[chosen_arm]
         return np.random.binomial(1,prob)
 
+# Double estimator. Selects index for maximum expected value in sample A but uses the value of sample B
 class DEBandit():
     def __init__(self, arms, probs) -> None:
+        
+        self.name = "DE"
         self.arms = arms
         self.probs = probs
         self.ptr = 0
@@ -265,6 +276,7 @@ class DEBandit():
         prob = self.probs[chosen_arm]
         return np.random.binomial(1,prob)
 
+# Helper functions for running mean and variance
 def _running_variance(n,var,old_mean,new_val):
     return ((n - 2) / (n - 1)) * var + ((1/n) * (new_val - old_mean)**2)
 
