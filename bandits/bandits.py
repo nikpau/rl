@@ -5,37 +5,6 @@ import numpy as np
 """
 Multi-armed Bandit with an e-greedy Agent and a Bernoulli modeled reward structure.
 """
-
-class EpsilonGreedyBandit():
-    def __init__(self, arms, epsilon, probs) -> None:
-        self.arms = arms
-        self.epsilon = epsilon
-        self.exp_value = [0.0] * arms
-        self.counts = [0] * arms
-        self.probs = probs # Probabilites of success for each arm
-        assert len(probs) == arms, "Number of probs must match number of arms"
-
-    def reset(self):
-        self.exp_value = [0.0] * self.arms
-        self.counts = [0] * self.arms
-
-    def select_arm(self):
-        if random.random() > self.epsilon:
-            max_indices = [index for index,value in enumerate(self.exp_value) if value == max(self.exp_value)]
-            return random.choice(max_indices)
-        else:
-            return random.randrange(self.arms)
-
-    def update(self, reward, chosen_arm):
-        self.counts[chosen_arm] += 1
-        n = float(self.counts[chosen_arm])
-        new_value = ((n-1)/n) * self.exp_value[chosen_arm] + (1/n) * reward
-        self.exp_value[chosen_arm] = new_value
-
-    def play(self, chosen_arm):
-        prob = self.probs[chosen_arm]
-        return 0 if random.random() > prob else 1
-
 class OSSBandit():
     def __init__(self, arms, alpha, probs) -> None:
         self.arms = arms
@@ -68,15 +37,15 @@ class OSSBandit():
         self.counts[chosen_arm] += 1
         curr_count = self.counts[chosen_arm]
         curr_exp = self.exp_value[chosen_arm]
-        new_exp = ((curr_count - 1) / curr_count) * curr_exp + (1/curr_count) * reward
+        new_exp = _running_mean(curr_count,curr_exp,reward)
 
         # Update variance (Welford's online algorithm)
         curr_var = self.var[chosen_arm]
         if curr_count <= 2:
             new_var = 0.001
         else:
-            new_var = ((curr_count - 2) / (curr_count - 1)) * curr_var + ((1/curr_count) * (reward - curr_exp)**2)
-
+            #new_var = ((curr_count - 2) / (curr_count - 1)) * curr_var + ((1/curr_count) * (reward - curr_exp)**2)
+            new_var = _running_variance(curr_count,curr_var,curr_exp,reward)
         self.exp_value[chosen_arm] = new_exp
         self.var[chosen_arm] = new_var
 
@@ -111,7 +80,7 @@ class OSSBandit():
         if curr_count <= 2:
             return 0.001
         else:
-            new_var = ((curr_count - 2) / (curr_count - 1)) * curr_var + ((1/curr_count) * (new_max_mu - curr_max_mu)**2)
+            new_var = _running_variance(curr_count,curr_var,curr_max_mu,new_max_mu)
         
         return new_var
         
@@ -155,14 +124,14 @@ class MEBandit():
         self.counts[chosen_arm] += 1
         curr_count = self.counts[chosen_arm]
         curr_exp = self.exp_value[chosen_arm]
-        new_exp = ((curr_count - 1) / curr_count) * curr_exp + (1/curr_count) * reward # running mean
+        new_exp = _running_mean(curr_count,curr_exp,reward)
 
         # Update variance (Welford's online algorithm)
         curr_var = self.var[chosen_arm]
         if curr_count <= 2:
             new_var = 0.001
         else:
-            new_var = ((curr_count - 2) / (curr_count - 1)) * curr_var + ((1/curr_count) * (reward - curr_exp)**2)
+            new_var = _running_variance(curr_count,curr_var,curr_exp,reward)
 
         self.exp_value[chosen_arm] = new_exp
         self.var[chosen_arm] = new_var
@@ -183,7 +152,7 @@ class MEBandit():
         if curr_count <= 2:
             return 0.001
         else:
-            new_var = ((curr_count - 2) / (curr_count - 1)) * curr_var + ((1/curr_count) * (new_max_mu - curr_max_mu)**2)
+            new_var = _running_variance(curr_count,curr_var,curr_max_mu,new_max_mu)
         
         return new_var
         
@@ -236,14 +205,14 @@ class DEBandit():
             self.counts_A[chosen_arm] += 1
             curr_count_A = self.counts_A[chosen_arm]
             curr_exp_A = self.exp_value_A[chosen_arm]
-            new_exp_A = ((curr_count_A- 1) / curr_count_A) * curr_exp_A + (1/curr_count_A) * reward # running mean
+            new_exp_A = _running_mean(curr_count_A,curr_exp_A,reward)
 
             # Update variance (Welford's online algorithm)
             curr_var_A = self.var_A[chosen_arm]
             if curr_count_A <= 2:
                 new_var_A = 0.001
             else:
-                new_var_A = ((curr_count_A - 2) / (curr_count_A - 1)) * curr_var_A + ((1/curr_count_A)* (reward - curr_exp_A)**2)
+                new_var_A = _running_variance(curr_count_A,curr_var_A,curr_exp_A,reward)
                 
             self.exp_value_A[chosen_arm] = new_exp_A
             self.var_A[chosen_arm] = new_var_A
@@ -251,7 +220,7 @@ class DEBandit():
             self.counts_B[chosen_arm] += 1
             curr_count_B = self.counts_B[chosen_arm]
             curr_exp_B = self.exp_value_B[chosen_arm]
-            new_exp_B = ((curr_count_B- 1) / curr_count_B) * curr_exp_B + (1/curr_count_B) * reward # running mean
+            new_exp_B = _running_mean(curr_count_B,curr_exp_B,reward)
 
             # Update expected value
             # Update variance (Welford's online algorithm)
@@ -259,7 +228,7 @@ class DEBandit():
             if curr_count_B <= 2:
                 new_var_B = 0.001
             else:
-                new_var_B = ((curr_count_B - 2) / (curr_count_B - 1)) * curr_var_B + ((1/curr_count_B) * (reward - curr_exp_B)**2)
+                new_var_B = _running_variance(curr_count_B,curr_var_B,curr_exp_B,reward)
             self.exp_value_B[chosen_arm] = new_exp_B
             self.var_B[chosen_arm] = new_var_B
 
@@ -280,7 +249,8 @@ class DEBandit():
         if curr_count <= 2:
             return 0.001
         else:
-            new_var = ((curr_count - 2) / (curr_count - 1)) * curr_var + ((1/curr_count) * (new_max_mu - curr_max_mu)**2)
+            new_var = _running_variance(n=curr_count,var=curr_var,
+                                        old_mean=curr_max_mu,new_val=new_max_mu)
         
         return new_var
 
@@ -294,3 +264,9 @@ class DEBandit():
     def play(self, chosen_arm):
         prob = self.probs[chosen_arm]
         return np.random.binomial(1,prob)
+
+def _running_variance(n,var,old_mean,new_val):
+    return ((n - 2) / (n - 1)) * var + ((1/n) * (new_val - old_mean)**2)
+
+def _running_mean(n,old_mean,new_val):
+    return ((n-1) / n) * old_mean + (1/n) * new_val
